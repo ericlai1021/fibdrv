@@ -25,6 +25,46 @@ static struct class *fib_class;
 static DEFINE_MUTEX(fib_mutex);
 static ktime_t kt;
 
+static long long fib_sequence_fast(long long k)
+{
+    if (k == 0)
+        return k;
+
+    long long a = 0, b = 1;
+
+    /* calculate the number of binary digits in k using clz */
+    int nbits = (sizeof(k) << 3) - __builtin_clzll(k);
+
+    /* calculate the number of binary digits in k without using clz */
+    /*
+     * int nbits = 0;
+     * int llsize = sizeof(k) << 3;
+     *
+     * for (int i = llsize - 1; i >= 0; i--) {
+     *     if (k >> i)
+     *         break;
+     *
+     *     nbits++;
+     * }
+     * nbits = llsize - nbits;
+     */
+
+    for (int i = nbits - 1; i >= 0; i--) {
+        long long t1 = a * ((2 * b) - a);
+        long long t2 = b * b + a * a;
+
+        a = t1;
+        b = t2;
+        if (k & (1 << i)) {
+            t1 = a + b;
+            a = b;
+            b = t1;
+        }
+    }
+
+    return a;
+}
+
 static long long fib_sequence(long long k)
 {
     /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel. */
