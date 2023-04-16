@@ -15,16 +15,18 @@ int main()
     char write_buf[] = "testing writing";
     int offset = 100; /* TODO: try test something bigger than the limit */
 
+    FILE *fp = fopen("time_with_clz.txt", "w");
+    if (!fp) {
+        printf("failed to open the file.\n");
+        return 1;  // EXIT_FAILURE
+    }
+
     int fd = open(FIB_DEV, O_RDWR);
     if (fd < 0) {
         perror("Failed to open character device");
         exit(1);
     }
 
-    for (int i = 0; i <= offset; i++) {
-        sz = write(fd, write_buf, strlen(write_buf));
-        printf("Writing to " FIB_DEV ", returned the sequence %lld\n", sz);
-    }
 
     for (int i = 0; i <= offset; i++) {
         lseek(fd, i, SEEK_SET);
@@ -33,6 +35,8 @@ int main()
                " at offset %d, returned the sequence "
                "%lld.\n",
                i, sz);
+        sz = write(fd, write_buf, strlen(write_buf));
+        fprintf(fp, "%lld\n", sz);
     }
 
     for (int i = offset; i >= 0; i--) {
