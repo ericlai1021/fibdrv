@@ -194,7 +194,7 @@ void bn_sub(const bn *a, const bn *b, bn *c)
 void bn_lshift(bn *dest, bn *src, size_t shift)
 {
     size_t z = bn_clz(src);
-    shift %= 32;  // only handle shift within 32 bits atm
+    shift %= 32;  // only handle shift within 32 bits
     if (!shift)
         return;
 
@@ -248,7 +248,7 @@ void bn_mult(const bn *a, const bn *b, bn *c)
     }
 }
 
-void bn_fib(bn *dest, unsigned int n)
+void bn_fib_fast(bn *dest, unsigned int n)
 {
     bn_resize(dest, 1);
     if (n < 2) {  // Fib(0) = 0, Fib(1) = 1
@@ -256,15 +256,60 @@ void bn_fib(bn *dest, unsigned int n)
         return;
     }
 
+    int nbits = (sizeof(n) << 3) - __builtin_clz(n);
     bn *a = bn_alloc(1);
+    a->number[0] = 0U;
     bn *b = bn_alloc(1);
-    dest->number[0] = 1;
+    b->number[0] = 1U;
 
-    for (unsigned int i = 1; i < n; i++) {
-        bn_cpy(b, dest);
-        bn_add(dest, a, dest);
-        bn_cpy(a, b);
+    for (int i = nbits - 1; i >= 0; i--) {
+        bn *t1 = bn_alloc(1);
+        bn_lshift(t1, b, 1);
+        bn_sub(t1, a, t1);
+        bn_mult(a, t1, t1);
+
+        bn *t2 = bn_alloc(1);
+        bn_mult(b, b, b);
+        bn_mult(a, a, a);
+        bn_add(a, b, t2);
+
+        bn_cpy(a, t1);
+        bn_cpy(b, t2);
+
+        if (n & (1U << i)) {
+            bn_add(a, b, t1);
+            bn_cpy(a, b);
+            bn_cpy(b, t1);
+        }
+
+        bn_free(t1);
+        bn_free(t2);
     }
+    bn_cpy(dest, a);
+
     bn_free(a);
     bn_free(b);
 }
+
+/*
+ * void bn_fib(bn *dest, unsigned int n)
+ * {
+ *     bn_resize(dest, 1);
+ *     if (n < 2) {  // Fib(0) = 0, Fib(1) = 1
+ *         dest->number[0] = n;
+ *         return;
+ *     }
+ *
+ *     bn *a = bn_alloc(1);
+ *     bn *b = bn_alloc(1);
+ *     dest->number[0] = 1;
+ *
+ *     for (unsigned int i = 1; i < n; i++) {
+ *         bn_cpy(b, dest);
+ *         bn_add(dest, a, dest);
+ *         bn_cpy(a, b);
+ *     }
+ *     bn_free(a);
+ *     bn_free(b);
+ * }
+ */

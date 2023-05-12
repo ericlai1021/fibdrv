@@ -10,14 +10,8 @@
 int main()
 {
     char buf[630];
-    char write_buf[] = "testing writing";
+    // char write_buf[] = "testing writing";
     int offset = 3000; /* TODO: try test something bigger than the limit */
-
-    FILE *fp = fopen("time_with_clz.txt", "w");
-    if (!fp) {
-        printf("failed to open the file.\n");
-        return 1;  // EXIT_FAILURE
-    }
 
     int fd = open(FIB_DEV, O_RDWR);
     if (fd < 0) {
@@ -34,8 +28,7 @@ int main()
                " at offset %d, returned the sequence "
                "%s.\n",
                i, buf);
-        sz = write(fd, write_buf, strlen(write_buf));
-        fprintf(fp, "%s\n", buf);
+        // sz = write(fd, write_buf, strlen(write_buf));
     }
 
     close(fd);

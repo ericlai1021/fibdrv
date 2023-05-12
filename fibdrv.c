@@ -21,7 +21,7 @@ MODULE_VERSION("0.1");
 /* MAX_LENGTH is set to 92 because
  * ssize_t can't fit the number > 92
  */
-#define MAX_LENGTH 92
+#define MAX_LENGTH 3000
 
 static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
@@ -115,14 +115,15 @@ static ssize_t fib_read(struct file *file,
                         loff_t *offset)
 {
     bn *fib = bn_alloc(1);
-    bn_fib(fib, *offset);
+    bn_fib_fast(fib, *offset);
+    // bn_fib(fib, *offset);
     char *p = bn_to_string(fib);
     size_t len = strlen(p) + 1;
     size_t left = copy_to_user(buf, p, len);
     // printk(KERN_DEBUG "fib(%d): %s\n", (int) *offset, p);
     bn_free(fib);
     kfree(p);
-    return left;  // return number of bytes that could not be copied
+    return (ssize_t) left;  // return number of bytes that could not be copied
 }
 
 /* write operation is skipped */
@@ -131,7 +132,8 @@ static ssize_t fib_write(struct file *file,
                          size_t size,
                          loff_t *offset)
 {
-    return ktime_to_ns(kt);
+    // return ktime_to_ns(kt);
+    return 1;
 }
 
 static loff_t fib_device_lseek(struct file *file, loff_t offset, int orig)
