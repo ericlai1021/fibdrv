@@ -5,9 +5,9 @@ result = []
 result_split = []
 dics = []
 
-for i in range(2, 101):
+for i in range(2, 3001):
     expect.append(expect[i - 1] + expect[i - 2])
-with open('out', 'r') as f:
+with open('../out', 'r') as f:
     tmp = f.readline()
     while (tmp):
         result.append(tmp)
@@ -26,3 +26,5 @@ for i in dics:
         print('input: %s' %(fib))
         print('expected: %s' %(expect[i[0]]))
         exit()
+
+print('congratulations, you pass all test!!!')
