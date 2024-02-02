@@ -27,6 +27,7 @@ MODULE_VERSION("0.1");
 static dev_t fib_dev = 0;
 static struct class *fib_class;
 static DEFINE_MUTEX(fib_mutex);
+static ktime_t kt;
 static int major = 0, minor = 0;
 
 static long long fib_sequence(long long k)
@@ -44,15 +45,6 @@ static long long fib_sequence(long long k)
     return f[k];
 }
 
-static long long fib_time_proxy(long long k)
-{
-    kt = ktime_get();
-    long long result = fib_sequence(k);
-    kt = ktime_sub(ktime_get(), kt);
-
-    return result;
-}
-
 static int fib_open(struct inode *inode, struct file *file)
 {
     if (!mutex_trylock(&fib_mutex)) {
@@ -66,6 +58,15 @@ static int fib_release(struct inode *inode, struct file *file)
 {
     mutex_unlock(&fib_mutex);
     return 0;
+}
+
+static long long fib_time_proxy(long long k)
+{
+    kt = ktime_get();
+    long long result = fib_sequence(k);
+    kt = ktime_sub(ktime_get(), kt);
+
+    return result;
 }
 
 /* calculate the fibonacci number at given offset */
