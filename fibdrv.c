@@ -8,6 +8,7 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>  // Required for the copy_to_user()
+#include <linux/version.h>
 
 #include "bn.h"
 
@@ -24,50 +25,9 @@ MODULE_VERSION("0.1");
 #define MAX_LENGTH 3000
 
 static dev_t fib_dev = 0;
-static struct cdev *fib_cdev;
 static struct class *fib_class;
 static DEFINE_MUTEX(fib_mutex);
-static ktime_t kt;
-
-static long long fib_sequence_fast(long long k)
-{
-    if (k == 0)
-        return k;
-
-    long long a = 0, b = 1;
-
-    /* calculate the number of binary digits in k using clz */
-    int nbits = (sizeof(k) << 3) - __builtin_clzll(k);
-
-    /* calculate the number of binary digits in k without using clz */
-    /*
-     * int nbits = 0;
-     * int llsize = sizeof(k) << 3;
-     *
-     * for (int i = llsize - 1; i >= 0; i--) {
-     *     if (k >> i)
-     *         break;
-     *
-     *     nbits++;
-     * }
-     * nbits = llsize - nbits;
-     */
-
-    for (int i = nbits - 1; i >= 0; i--) {
-        long long t1 = a * ((2 * b) - a);
-        long long t2 = b * b + a * a;
-
-        a = t1;
-        b = t2;
-        if (k & (1 << i)) {
-            t1 = a + b;
-            a = b;
-            b = t1;
-        }
-    }
-
-    return a;
-}
+static int major = 0, minor = 0;
 
 static long long fib_sequence(long long k)
 {
@@ -96,7 +56,7 @@ static long long fib_time_proxy(long long k)
 static int fib_open(struct inode *inode, struct file *file)
 {
     if (!mutex_trylock(&fib_mutex)) {
-        printk(KERN_ALERT "fibdrv is in use");
+        printk(KERN_ALERT "fibdrv is in use\n");
         return -EBUSY;
     }
     return 0;
@@ -114,13 +74,12 @@ static ssize_t fib_read(struct file *file,
                         size_t size,
                         loff_t *offset)
 {
+    // return (ssize_t) fib_sequence(*offset);
     bn *fib = bn_alloc(1);
     bn_fib_fast(fib, *offset);
-    // bn_fib(fib, *offset);
     char *p = bn_to_string(fib);
     size_t len = strlen(p) + 1;
     size_t left = copy_to_user(buf, p, len);
-    // printk(KERN_DEBUG "fib(%d): %s\n", (int) *offset, p);
     bn_free(fib);
     kfree(p);
     return (ssize_t) left;  // return number of bytes that could not be copied
@@ -171,45 +130,30 @@ const struct file_operations fib_fops = {
 static int __init init_fib_dev(void)
 {
     int rc = 0;
-
     mutex_init(&fib_mutex);
 
     // Let's register the device
     // This will dynamically allocate the major number
-    rc = alloc_chrdev_region(&fib_dev, 0, 1, DEV_FIBONACCI_NAME);
-
+    rc = major = register_chrdev(major, DEV_FIBONACCI_NAME, &fib_fops);
     if (rc < 0) {
-        printk(KERN_ALERT
-               "Failed to register the fibonacci char device. rc = %i",
-               rc);
-        return rc;
-    }
-
-    fib_cdev = cdev_alloc();
-    if (fib_cdev == NULL) {
-        printk(KERN_ALERT "Failed to alloc cdev");
-        rc = -1;
-        goto failed_cdev;
-    }
-    fib_cdev->ops = &fib_fops;
-    rc = cdev_add(fib_cdev, fib_dev, 1);
-
-    if (rc < 0) {
-        printk(KERN_ALERT "Failed to add cdev");
+        printk(KERN_ALERT "Failed to add cdev\n");
         rc = -2;
         goto failed_cdev;
     }
-
+    fib_dev = MKDEV(major, minor);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+    fib_class = class_create(DEV_FIBONACCI_NAME);
+#else
     fib_class = class_create(THIS_MODULE, DEV_FIBONACCI_NAME);
-
+#endif
     if (!fib_class) {
-        printk(KERN_ALERT "Failed to create device class");
+        printk(KERN_ALERT "Failed to create device class\n");
         rc = -3;
         goto failed_class_create;
     }
 
     if (!device_create(fib_class, NULL, fib_dev, NULL, DEV_FIBONACCI_NAME)) {
-        printk(KERN_ALERT "Failed to create device");
+        printk(KERN_ALERT "Failed to create device\n");
         rc = -4;
         goto failed_device_create;
     }
@@ -217,9 +161,8 @@ static int __init init_fib_dev(void)
 failed_device_create:
     class_destroy(fib_class);
 failed_class_create:
-    cdev_del(fib_cdev);
 failed_cdev:
-    unregister_chrdev_region(fib_dev, 1);
+    unregister_chrdev(major, DEV_FIBONACCI_NAME);
     return rc;
 }
 
@@ -228,8 +171,7 @@ static void __exit exit_fib_dev(void)
     mutex_destroy(&fib_mutex);
     device_destroy(fib_class, fib_dev);
     class_destroy(fib_class);
-    cdev_del(fib_cdev);
-    unregister_chrdev_region(fib_dev, 1);
+    unregister_chrdev(major, DEV_FIBONACCI_NAME);
 }
 
 module_init(init_fib_dev);
