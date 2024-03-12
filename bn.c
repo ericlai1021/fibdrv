@@ -144,6 +144,14 @@ int bn_cpy(bn *dest, const bn *src)
     return 0;
 }
 
+/* swap two bn pointer */
+void bn_swap(bn *a, bn *b)
+{
+    bn tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
 /* c = a + b */
 void bn_add(const bn *a, const bn *b, bn *c)
 {
@@ -161,33 +169,6 @@ void bn_add(const bn *a, const bn *b, bn *c)
 
     if (!c->number[c->size - 1] && c->size > 1)
         bn_resize(c, c->size - 1);
-}
-
-/* c = a - b */
-void bn_sub(const bn *a, const bn *b, bn *c)
-{
-    bn_resize(c, MAX(a->size, b->size));
-
-    long long borrow = 0;
-    for (int i = 0; i < c->size; i++) {
-        unsigned int tmp1 = (i < a->size) ? a->number[i] : 0;
-        unsigned int tmp2 = (i < b->size) ? b->number[i] : 0;
-
-        borrow = (long long) tmp1 - tmp2 - borrow;
-        if (borrow < 0) {
-            c->number[i] = borrow + (1LL << 32);
-            borrow = 1;
-        } else {
-            c->number[i] = borrow;
-            borrow = 0;
-        }
-    }
-
-    int clz_ints = bn_clz(c) / 32;
-    if (clz_ints == c->size)
-        --clz_ints;
-
-    bn_resize(c, c->size - clz_ints);
 }
 
 /* dest = src << shift */
@@ -250,44 +231,39 @@ void bn_mult(const bn *a, const bn *b, bn *c)
 
 void bn_fib_fast(bn *dest, unsigned int n)
 {
-    bn_resize(dest, 1);
     if (n < 2) {  // Fib(0) = 0, Fib(1) = 1
         dest->number[0] = n;
         return;
     }
 
-    int nbits = (sizeof(n) << 3) - __builtin_clz(n);
-    bn *a = bn_alloc(1);
-    a->number[0] = 0U;
-    bn *b = bn_alloc(1);
-    b->number[0] = 1U;
+    int nbits = 32 - __builtin_clz(n);
 
-    for (int i = nbits - 1; i >= 0; i--) {
-        bn *t1 = bn_alloc(1);
-        bn_lshift(t1, b, 1);
-        bn_sub(t1, a, t1);
-        bn_mult(a, t1, t1);
+    dest->number[0] = 1U;  // dest = F(n), now is F(1)
+    bn *b = bn_alloc(1);   // b = F(n - 1), now is F(0)
+    b->number[0] = 0U;
+    bn *t1 = bn_alloc(1);
 
-        bn *t2 = bn_alloc(1);
-        bn_mult(b, b, b);
-        bn_mult(a, a, a);
-        bn_add(a, b, t2);
+    /* F(2n - 1) = F(n)^2 + F(n - 1)^2
+     * F(2n) = F(n) * (2F(n - 1) + F(n))
+     */
+    for (int i = nbits - 2; i >= 0; i--) {
+        bn_lshift(t1, b, 1);    // t1 = F(n - 1) * 2
+        bn_add(t1, dest, t1);   // t1 = 2F(n - 1) + F(n)
+        bn_mult(dest, t1, t1);  // t1 = F(n) * (2F(n - 1) + F(n)), now is F(2n)
+        bn_mult(b, b, b);       // b = F(n - 1)^2
+        // bn_sqr(b, b);
+        // bn_sqr(dest, dest);
+        bn_mult(dest, dest, dest);  // dest = F(n)^2
+        bn_add(dest, b, b);         // b = F(n)^2 + F(n - 1)^2, now is F(2n - 1)
 
-        bn_cpy(a, t1);
-        bn_cpy(b, t2);
+        bn_swap(dest, t1);
 
         if (n & (1U << i)) {
-            bn_add(a, b, t1);
-            bn_cpy(a, b);
-            bn_cpy(b, t1);
+            bn_swap(dest, b);
+            bn_add(dest, b, dest);
         }
-
-        bn_free(t1);
-        bn_free(t2);
     }
-    bn_cpy(dest, a);
-
-    bn_free(a);
+    bn_free(t1);
     bn_free(b);
 }
 
