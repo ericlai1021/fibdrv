@@ -179,15 +179,18 @@ void bn_lshift(bn *dest, bn *src, size_t shift)
     if (!shift)
         return;
 
-    if (shift > z)
-        bn_resize(src, src->size + 1);
+    if (shift > z) {
+        bn_resize(dest, src->size + 1);
+        dest->number[src->size] = src->number[src->size - 1] >> (32 - shift);
+    } else {
+        bn_resize(dest, src->size);
+    }
 
-    bn_cpy(dest, src);
     /* bit shift */
     for (int i = src->size - 1; i > 0; i--)
         dest->number[i] =
             src->number[i] << shift | src->number[i - 1] >> (32 - shift);
-    dest->number[0] <<= shift;
+    dest->number[0] = src->number[0] << shift;
 }
 
 void bn_mult(const bn *a, const bn *b, bn *c)

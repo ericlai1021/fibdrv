@@ -27,6 +27,9 @@ int bn_free(bn *src);
  */
 int bn_cpy(bn *dest, const bn *src);
 
+/* swap two bn pointer */
+void bn_swap(bn *a, bn *b);
+
 /* c = a + b */
 void bn_add(const bn *a, const bn *b, bn *c);
 
